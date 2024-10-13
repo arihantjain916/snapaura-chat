@@ -1,0 +1,24 @@
+{
+  "name": "snap-aura-chat-backend",
+  "version": "1.0.0",
+  "description": "chat backend for snapaura a social media app made entirly using laravel as main backend",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arihantjain916/snapaura-chat.git"
+  },
+  "author": "ARIHANT-JAIN",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/arihantjain916/snapaura-chat/issues"
+  },
+  "homepage": "https://github.com/arihantjain916/snapaura-chat#readme",
+  "dependencies": {
+    "@types/node": "^22.7.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  }
+}
