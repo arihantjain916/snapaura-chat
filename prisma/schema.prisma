@@ -6,6 +6,7 @@ datasource db {
   provider = "mongodb"
   url      = env("DATABASE_URL")
 }
+
 model Conversation {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
   created_at  DateTime  @default(now())
@@ -23,6 +24,7 @@ model Message {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   created_at     DateTime @default(now())
   message        String
+  sender_id      String
   conversationId String?  @db.ObjectId
   groupId        String?  @db.ObjectId
 
@@ -35,7 +37,7 @@ model Message {
 model Message_attachment {
   id        String  @id @default(auto()) @map("_id") @db.ObjectId
   messageId String  @db.ObjectId
-  fileUrl   String 
+  fileUrl   String
   fileType  String
   message   Message @relation(fields: [messageId], references: [id])
 }
