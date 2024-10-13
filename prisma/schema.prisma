@@ -13,6 +13,9 @@ model Conversation {
   receiver_id String
   sender_id   String
   message     Message[]
+
+  @@index([sender_id])
+  @@index([receiver_id])
 }
 
 model Group {
@@ -25,6 +28,7 @@ model Message {
   created_at     DateTime @default(now())
   message        String
   sender_id      String
+  receiver_id String
   conversationId String?  @db.ObjectId
   groupId        String?  @db.ObjectId
 
@@ -32,6 +36,9 @@ model Message {
   group        Group?        @relation(fields: [groupId], references: [id])
 
   file_attachment Message_attachment[]
+
+  @@index([conversationId])
+  @@index([groupId])
 }
 
 model Message_attachment {
