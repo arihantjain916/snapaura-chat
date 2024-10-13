@@ -2,7 +2,7 @@
   "name": "snap-aura-chat-backend",
   "version": "1.0.0",
   "description": "chat backend for snapaura a social media app made entirly using laravel as main backend",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
     "dev": "nodemon index.ts"
   },
