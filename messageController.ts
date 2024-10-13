@@ -102,13 +102,21 @@ export const fetchConversation = async (req: any, res: any) => {
 };
 export const fetchMessage = async (req: any, res: any) => {
   const senderId = req.params.senderId;
-  console.log("ss " + typeof senderId);
+  const receiverId = req.params.receiverId;
 
   try {
-    // Fetch conversation or group messages based on senderId
     const conversation = await prisma.conversation.findFirst({
       where: {
-        OR: [{ sender_id: senderId.toString() }, { receiver_id: senderId.toString() }],
+        OR: [
+          {
+            sender_id: senderId,
+            receiver_id: receiverId,
+          },
+          {
+            sender_id: receiverId,
+            receiver_id: senderId,
+          },
+        ],
       },
       select: { id: true },
     });
