@@ -27,7 +27,7 @@ io.on("connection", (socket) => {
   socket.on("add-user", async (data) => {
     const user = await fetchUserDetail(data);
     onlineUser.set(user, socket.id);
-    // console.log(onlineUser);
+    console.log(onlineUser);
   });
 
   saveMessage(socket, io, onlineUser);
