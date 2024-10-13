@@ -1,6 +1,11 @@
 import express from "express";
 import { Server } from "socket.io";
-import { fetchUserDetail, saveMessage } from "./messageController";
+import {
+  fetchUserDetail,
+  saveMessage,
+  fetchMessage,
+  fetchConversation
+} from "./messageController";
 
 const app = express();
 
@@ -9,6 +14,9 @@ app.get("/", function (req, res) {
     message: "Hello World!",
   });
 });
+
+app.get("/messages/:senderId/:receiverId", fetchMessage);
+app.get("/conversation/:senderId", fetchConversation);
 
 const server = app.listen(3000, () => {
   console.log("Listening on port 3000");
@@ -27,6 +35,7 @@ io.on("connection", (socket) => {
   socket.on("add-user", async (data) => {
     const user = await fetchUserDetail(data);
     onlineUser.set(user.id, socket.id);
+
     console.log(onlineUser);
   });
 
