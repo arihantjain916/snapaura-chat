@@ -1,6 +1,6 @@
 import express from "express";
 import { Server } from "socket.io";
-import { fetchUserDetail, saveMessage } from "./messageController.js";
+import { fetchUserDetail, saveMessage } from "./messageController";
 
 const app = express();
 

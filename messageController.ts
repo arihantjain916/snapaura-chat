@@ -23,17 +23,22 @@ export const saveMessage = async (
   users: Map<any, any>
 ) => {
   socket.on("send-msg", async (data) => {
-    var isChatExist: { id: any };
+    var isChatExist: {
+      id: string;
+      created_at: Date;
+      receiver_id: string;
+      sender_id: string;
+    } | null;
     isChatExist = await prisma.conversation.findFirst({
       where: {
         OR: [
           {
-            senderId: data.senderId,
-            receiverId: data.receiverId,
+            sender_id: data.senderId,
+            receiver_id: data.receiverId,
           },
           {
-            senderId: data.receiverId,
-            receiverId: data.senderId,
+            sender_id: data.receiverId,
+            receiver_id: data.senderId,
           },
         ],
       },
@@ -42,8 +47,8 @@ export const saveMessage = async (
     if (!isChatExist) {
       isChatExist = await prisma.conversation.create({
         data: {
-          senderId: data.senderId,
-          receiverId: data.receiverId,
+          sender_id: data.senderId,
+          receiver_id: data.receiverId,
         },
       });
     }
