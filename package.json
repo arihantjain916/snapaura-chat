@@ -24,6 +24,7 @@
     "nodemon": "^3.1.7",
     "express": "^4.21.1",
     "@prisma/client": "^5.20.0",
-    "prisma": "^5.20.0"
+    "prisma": "^5.20.0",
+    "axios": "^1.7.7"
   }
 }
