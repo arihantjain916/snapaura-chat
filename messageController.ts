@@ -11,7 +11,7 @@ export const fetchUserDetail = async (data: string) => {
       },
     });
 
-    return response.data.user.id;
+    return response.data.user;
   } catch (err) {
     console.log(err);
   }
