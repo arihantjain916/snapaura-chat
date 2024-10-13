@@ -1,7 +1,6 @@
 import axios from "axios";
 import { PrismaClient } from "@prisma/client";
 import { Socket, DefaultEventsMap, Server } from "socket.io";
-import { stat } from "fs";
 const prisma = new PrismaClient();
 
 export const fetchUserDetail = async (data: string) => {
