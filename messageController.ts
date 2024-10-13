@@ -57,6 +57,7 @@ export const saveMessage = async (
       data: {
         message: data.message,
         conversationId: isChatExist?.id,
+        sender_id: data.senderId,
       },
     });
 
@@ -64,7 +65,6 @@ export const saveMessage = async (
       console.log("error");
     }
     const sendUserSocket = users.get(data.receiverId);
-    console.log(sendUserSocket);
     if (sendUserSocket) {
       io.to(sendUserSocket).emit("msg-recieve", data.message);
     }
