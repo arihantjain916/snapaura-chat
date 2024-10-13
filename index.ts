@@ -1,5 +1,6 @@
 import express from "express";
 import { Server } from "socket.io";
+import { fetchUserDetail, saveMessage } from "./messageController.js";
 
 const app = express();
 
@@ -19,20 +20,20 @@ const io = new Server(server, {
   },
 });
 
-global.onlineUser = new Map();
+const onlineUser = new Map();
 io.on("connection", (socket) => {
   console.log("a user connected");
 
   socket.on("add-user", async (data) => {
-    // const user = await fetchUserDetail(data);
-    // onlineUser.set(user,socket.id);
-    // console.log(onlineUser);
+    const user = await fetchUserDetail(data);
+    onlineUser.set(user, socket.id);
+    console.log(onlineUser);
   });
 
-  //   saveMessage(socket, io, onlineUser);
+  saveMessage(socket, io, onlineUser);
 
   socket.on("disconnect", () => {
-    // onlineUser.delete(socket.id);
+    onlineUser.delete(socket.id);
     console.log("user disconnected");
   });
 });
