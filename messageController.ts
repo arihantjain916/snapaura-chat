@@ -100,4 +100,58 @@ export const fetchConversation = async (req: any, res: any) => {
     data: conversation,
   });
 };
+export const fetchMessage = async (req: any, res: any) => {
+  const senderId = req.params.senderId;
+  console.log("ss " + typeof senderId);
 
+  try {
+    // Fetch conversation or group messages based on senderId
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        OR: [{ sender_id: senderId.toString() }, { receiver_id: senderId.toString() }],
+      },
+      select: { id: true },
+    });
+
+    if (!conversation) {
+      return res.status(404).json({
+        message: "Conversation not found",
+        data: [],
+      });
+    }
+
+    const messages = await prisma.message.findMany({
+      where: { conversationId: conversation.id },
+    });
+
+    if (!messages || messages.length === 0) {
+      return res.status(404).json({
+        message: "No messages found",
+        data: [],
+      });
+    }
+
+    const messageFilter = messages.map((message) => ({
+      id: message.id,
+      message: message.message,
+      createdAt: message?.created_at,
+      receiverId: message.receiver_id,
+      senderId: message.sender_id,
+      // type: message.conversationId ? "conversation" : "group",
+      // attachments: message.fileAttachment.map((attachment) => ({
+      //   fileUrl: attachment.fileUrl,
+      //   fileType: attachment.fileType,
+      // })),
+    }));
+
+    return res.status(200).json({
+      message: "Messages found",
+      data: messageFilter,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "An error occurred while fetching messages",
+      error: error.message,
+    });
+  }
+};
