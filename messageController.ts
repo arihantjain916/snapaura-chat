@@ -1,5 +1,6 @@
 import axios from "axios";
 import { PrismaClient } from "@prisma/client";
+import { Socket, DefaultEventsMap, Server } from "socket.io";
 const prisma = new PrismaClient();
 
 export const fetchUserDetail = async (data: string) => {
@@ -16,9 +17,14 @@ export const fetchUserDetail = async (data: string) => {
   }
 };
 
-export const saveMessage = async (socket, io, users) => {
+export const saveMessage = async (
+  socket: Socket<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, any>,
+  io: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, any>,
+  users: Map<any, any>
+) => {
   socket.on("send-msg", async (data) => {
-    const isChatExist = await prisma.conversation.findFirst({
+    var isChatExist: { id: any };
+    isChatExist = await prisma.conversation.findFirst({
       where: {
         OR: [
           {
@@ -34,7 +40,7 @@ export const saveMessage = async (socket, io, users) => {
     });
 
     if (!isChatExist) {
-      await prisma.conversation.create({
+      isChatExist = await prisma.conversation.create({
         data: {
           senderId: data.senderId,
           receiverId: data.receiverId,
@@ -42,16 +48,20 @@ export const saveMessage = async (socket, io, users) => {
       });
     }
 
-    await prisma.message.create({
+    const sendMessage = await prisma.message.create({
       data: {
-        senderId: data.senderId,
-        receiverId: data.receiverId,
+        message: data.message,
+        conversationId: isChatExist?.id,
       },
     });
-    // const sendUserSocket = users.get("9d347d85-672a-488e-8d89-84b9d8d0e043");
-    //   console.log(sendUserSocket);
-    //   if (sendUserSocket) {
-    //     io.to(sendUserSocket).emit("msg-recieve", data.message);
-    //   }
+
+    if (!sendMessage) {
+      console.log("error");
+    }
+    const sendUserSocket = users.get(data.receiverId);
+    console.log(sendUserSocket);
+    if (sendUserSocket) {
+      io.to(sendUserSocket).emit("msg-recieve", data.message);
+    }
   });
 };
