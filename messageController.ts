@@ -1,6 +1,7 @@
 import axios from "axios";
 import { PrismaClient } from "@prisma/client";
 import { Socket, DefaultEventsMap, Server } from "socket.io";
+import { stat } from "fs";
 const prisma = new PrismaClient();
 
 export const fetchUserDetail = async (data: string) => {
@@ -58,6 +59,7 @@ export const saveMessage = async (
         message: data.message,
         conversationId: isChatExist?.id,
         sender_id: data.senderId,
+        receiver_id: data.receiverId,
       },
     });
 
@@ -70,3 +72,32 @@ export const saveMessage = async (
     }
   });
 };
+
+export const fetchConversation = async (req: any, res: any) => {
+  const senderId = req.params.senderId;
+  const conversation = await prisma.conversation.findFirst({
+    where: {
+      OR: [
+        {
+          sender_id: senderId,
+        },
+        {
+          receiver_id: senderId,
+        },
+      ],
+    },
+  });
+
+  if (!conversation) {
+    return res.status(500).json({
+      status: false,
+      data: [],
+    });
+  }
+
+  return res.status(200).json({
+    status: true,
+    data: conversation,
+  });
+};
+
