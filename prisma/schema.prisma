@@ -1,14 +1,41 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
+}
+model Conversation {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  created_at  DateTime  @default(now())
+  receiver_id String
+  sender_id   String
+  message     Message[]
+}
+
+model Group {
+  id      String    @id @default(auto()) @map("_id") @db.ObjectId
+  message Message[]
+}
+
+model Message {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  created_at     DateTime @default(now())
+  message        String
+  conversationId String?  @db.ObjectId
+  groupId        String?  @db.ObjectId
+
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+  group        Group?        @relation(fields: [groupId], references: [id])
+
+  file_attachment Message_attachment[]
+}
+
+model Message_attachment {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  messageId String  @db.ObjectId
+  fileUrl   String 
+  fileType  String
+  message   Message @relation(fields: [messageId], references: [id])
 }
