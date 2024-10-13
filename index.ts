@@ -14,7 +14,25 @@ const server = app.listen(3000, () => {
 });
 
 const io = new Server(server, {
-    cors: {
-      origin: "*",
-    },
+  cors: {
+    origin: "*",
+  },
+});
+
+global.onlineUser = new Map();
+io.on("connection", (socket) => {
+  console.log("a user connected");
+
+  socket.on("add-user", async (data) => {
+    // const user = await fetchUserDetail(data);
+    // onlineUser.set(user,socket.id);
+    // console.log(onlineUser);
   });
+
+  //   saveMessage(socket, io, onlineUser);
+
+  socket.on("disconnect", () => {
+    // onlineUser.delete(socket.id);
+    console.log("user disconnected");
+  });
+});
