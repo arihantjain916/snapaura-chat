@@ -6,6 +6,7 @@ import {
   fetchMessage,
   fetchConversation,
 } from "./messageController";
+import {protect} from "./middleware/authMiddleware";
 
 const app = express();
 
@@ -15,8 +16,8 @@ app.get("/", function (req, res) {
   });
 });
 
-app.get("/messages/:senderId/:receiverId", fetchMessage);
-app.get("/conversation/:senderId", fetchConversation);
+app.get("/messages/:senderId/:receiverId", protect , fetchMessage);
+app.get("/conversation/",protect, fetchConversation);
 
 const server = app.listen(3001, () => {
   console.log("Listening on port 3001");
