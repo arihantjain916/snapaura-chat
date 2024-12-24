@@ -74,7 +74,7 @@ export const saveMessage = async (
 
 export const fetchConversation = async (req: any, res: any) => {
   const senderId = req.user.id;
-  const senderName = req.user.username;
+  const senderDetails = req.user;
   const conversation = await prisma.conversation.findMany({
     where: {
       OR: [
@@ -112,7 +112,7 @@ export const fetchConversation = async (req: any, res: any) => {
   );
 
   const userDetailsMap = new Map(
-    userDetails.map((user) => [user.data.id, user.data.username])
+    userDetails.map((user) => [user.data.id, user.data])
   );
 
   const data = conversation.map((item) => ({
@@ -122,11 +122,11 @@ export const fetchConversation = async (req: any, res: any) => {
     createdAt: item.created_at,
     senderName:
       item.sender_id === senderId
-        ? senderName
+        ? senderDetails
         : userDetailsMap.get(item.sender_id),
     receiverName:
       item.receiver_id === senderId
-        ? senderName
+        ? senderDetails
         : userDetailsMap.get(item.receiver_id),
   }));
 
