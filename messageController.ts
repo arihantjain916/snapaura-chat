@@ -101,7 +101,7 @@ export const fetchConversation = async (req: any, res: any) => {
   });
 };
 export const fetchMessage = async (req: any, res: any) => {
-  const senderId = req.params.senderId;
+  const senderId = req.user.id;
   const receiverId = req.params.receiverId;
 
   try {

@@ -16,8 +16,8 @@ app.get("/", function (req, res) {
   });
 });
 
-app.get("/messages/:senderId/:receiverId", protect , fetchMessage);
-app.get("/conversation/",protect, fetchConversation);
+app.get("/messages/:receiverId", protect , fetchMessage);
+app.get("/conversation",protect, fetchConversation);
 
 const server = app.listen(3001, () => {
   console.log("Listening on port 3001");
