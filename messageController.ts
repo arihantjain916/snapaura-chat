@@ -97,13 +97,9 @@ export const fetchConversation = async (req: any, res: any) => {
 
   const userIdsToFetch = Array.from(
     new Set(
-      conversation
-        .filter(
-          (item) => item.sender_id !== senderId || item.receiver_id !== senderId
-        )
-        .map((item) =>
-          item.sender_id === senderId ? item.receiver_id : item.sender_id
-        )
+      conversation.map((item) =>
+        item.sender_id === senderId ? item.receiver_id : item.sender_id
+      )
     )
   );
 
@@ -120,18 +116,17 @@ export const fetchConversation = async (req: any, res: any) => {
     senderId: item.sender_id,
     receiverId: item.receiver_id,
     createdAt: item.created_at,
-    senderName:
+    otherParty:
       item.sender_id === senderId
-        ? senderDetails
+        ? userDetailsMap.get(item.receiver_id)
         : userDetailsMap.get(item.sender_id),
-    receiverName:
-      item.receiver_id === senderId
-        ? senderDetails
-        : userDetailsMap.get(item.receiver_id),
+    senderName:
+      item.sender_id === senderId ? senderDetails : userDetailsMap.get(item.sender_id),
   }));
 
   return res.status(200).json({
     status: true,
+    authUserId: senderId,
     data,
   });
 };
