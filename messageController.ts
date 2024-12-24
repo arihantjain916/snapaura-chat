@@ -73,8 +73,8 @@ export const saveMessage = async (
 };
 
 export const fetchConversation = async (req: any, res: any) => {
-  console.log(req.user.id)
   const senderId = req.user.id;
+  const senderName = req.user.username;
   const conversation = await prisma.conversation.findMany({
     where: {
       OR: [
@@ -95,9 +95,44 @@ export const fetchConversation = async (req: any, res: any) => {
     });
   }
 
+  const userIdsToFetch = Array.from(
+    new Set(
+      conversation
+        .filter(
+          (item) => item.sender_id !== senderId || item.receiver_id !== senderId
+        )
+        .map((item) =>
+          item.sender_id === senderId ? item.receiver_id : item.sender_id
+        )
+    )
+  );
+
+  const userDetails = await Promise.all(
+    userIdsToFetch.map((userId) => fetchUserDetailfromBackend(userId))
+  );
+
+  const userDetailsMap = new Map(
+    userDetails.map((user) => [user.data.id, user.data.username])
+  );
+
+  const data = conversation.map((item) => ({
+    id: item.id,
+    senderId: item.sender_id,
+    receiverId: item.receiver_id,
+    createdAt: item.created_at,
+    senderName:
+      item.sender_id === senderId
+        ? senderName
+        : userDetailsMap.get(item.sender_id),
+    receiverName:
+      item.receiver_id === senderId
+        ? senderName
+        : userDetailsMap.get(item.receiver_id),
+  }));
+
   return res.status(200).json({
     status: true,
-    data: conversation,
+    data,
   });
 };
 export const fetchMessage = async (req: any, res: any) => {
@@ -163,3 +198,20 @@ export const fetchMessage = async (req: any, res: any) => {
     });
   }
 };
+
+async function fetchUserDetailfromBackend(data: string) {
+  try {
+    // console.log(`${process.env.API_URL}/user/info/${data}`)
+    const res = await axios.get(`${process.env.API_URL}/user/info/${data}`, {
+      headers: {
+        "SECRET-KEY": "mcIJfqCJuX7d8hPrb2yq3g1L3XH5ozxnH9LxVR7f0CMluP4Y7Y",
+      },
+    });
+    return res.data;
+  } catch (error: any) {
+    return {
+      success: false,
+      err: error.response,
+    };
+  }
+}
