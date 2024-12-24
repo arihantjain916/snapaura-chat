@@ -73,8 +73,9 @@ export const saveMessage = async (
 };
 
 export const fetchConversation = async (req: any, res: any) => {
-  const senderId = req.params.senderId;
-  const conversation = await prisma.conversation.findFirst({
+  console.log(req.user.id)
+  const senderId = req.user.id;
+  const conversation = await prisma.conversation.findMany({
     where: {
       OR: [
         {
@@ -87,7 +88,7 @@ export const fetchConversation = async (req: any, res: any) => {
     },
   });
 
-  if (!conversation) {
+  if (conversation.length === 0) {
     return res.status(500).json({
       status: false,
       data: [],
