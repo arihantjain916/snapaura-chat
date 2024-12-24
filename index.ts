@@ -4,22 +4,22 @@ import {
   fetchUserDetail,
   saveMessage,
   fetchMessage,
-  fetchConversation
+  fetchConversation,
 } from "./messageController";
 
 const app = express();
 
 app.get("/", function (req, res) {
-  res.json({
-    message: "Hello World!",
+  res.status(200).json({
+    message: "Welcome to SnapAura Chat Backend!",
   });
 });
 
 app.get("/messages/:senderId/:receiverId", fetchMessage);
 app.get("/conversation/:senderId", fetchConversation);
 
-const server = app.listen(3000, () => {
-  console.log("Listening on port 3000");
+const server = app.listen(3001, () => {
+  console.log("Listening on port 3001");
 });
 
 const io = new Server(server, {
