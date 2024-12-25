@@ -103,9 +103,28 @@ export const fetchConversation = async (req: any, res: any) => {
     )
   );
 
-  const userDetails = await Promise.all(
-    userIdsToFetch.map((userId) => fetchUserDetailfromBackend(userId))
-  );
+  let userDetails;
+
+  try {
+    userDetails = await Promise.all(
+      userIdsToFetch.map(async (userId) => {
+        try {
+          return await fetchUserDetailfromBackend(userId, res);
+        } catch (err: any) {
+          throw new Error(
+            `Error fetching details for userId ${userId}: ${err.message}`
+          );
+        }
+      })
+    );
+  } catch (err: any) {
+    return res.status(500).json({
+      status: false,
+      error: err.message,
+    });
+  }
+
+  console.log(userDetails);
 
   const userDetailsMap = new Map(
     userDetails.map((user) => [user.data.id, user.data])
@@ -121,7 +140,9 @@ export const fetchConversation = async (req: any, res: any) => {
         ? userDetailsMap.get(item.receiver_id)
         : userDetailsMap.get(item.sender_id),
     senderName:
-      item.sender_id === senderId ? senderDetails : userDetailsMap.get(item.sender_id),
+      item.sender_id === senderId
+        ? senderDetails
+        : userDetailsMap.get(item.sender_id),
   }));
 
   return res.status(200).json({
@@ -194,19 +215,17 @@ export const fetchMessage = async (req: any, res: any) => {
   }
 };
 
-async function fetchUserDetailfromBackend(data: string) {
+async function fetchUserDetailfromBackend(data: string, res: any) {
   try {
-    // console.log(`${process.env.API_URL}/user/info/${data}`)
     const res = await axios.get(`${process.env.API_URL}/user/info/${data}`, {
       headers: {
-        "SECRET-KEY": "mcIJfqCJuX7d8hPrb2yq3g1L3XH5ozxnH9LxVR7f0CMluP4Y7Y",
+        // "SECRET-KEY": "mcIJfqCJuX7d8hPrb2yq3g1L3XH5ozxnH9LxVR7f0CMluP4Y7Y",
       },
     });
     return res.data;
   } catch (error: any) {
-    return {
-      success: false,
-      err: error.response,
-    };
+    throw new Error(
+      error.response?.data?.message || "Failed to fetch user details"
+    );
   }
 }
