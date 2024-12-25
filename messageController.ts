@@ -73,8 +73,8 @@ export const saveMessage = async (
 };
 
 export const fetchConversation = async (req: any, res: any) => {
-  console.log(req.user.id)
   const senderId = req.user.id;
+  const senderDetails = req.user;
   const conversation = await prisma.conversation.findMany({
     where: {
       OR: [
@@ -95,9 +95,60 @@ export const fetchConversation = async (req: any, res: any) => {
     });
   }
 
+  const userIdsToFetch = Array.from(
+    new Set(
+      conversation.map((item) =>
+        item.sender_id === senderId ? item.receiver_id : item.sender_id
+      )
+    )
+  );
+
+  let userDetails;
+
+  try {
+    userDetails = await Promise.all(
+      userIdsToFetch.map(async (userId) => {
+        try {
+          return await fetchUserDetailfromBackend(userId, res);
+        } catch (err: any) {
+          throw new Error(
+            `Error fetching details for userId ${userId}: ${err.message}`
+          );
+        }
+      })
+    );
+  } catch (err: any) {
+    return res.status(500).json({
+      status: false,
+      error: err.message,
+    });
+  }
+
+  console.log(userDetails);
+
+  const userDetailsMap = new Map(
+    userDetails.map((user) => [user.data.id, user.data])
+  );
+
+  const data = conversation.map((item) => ({
+    id: item.id,
+    senderId: item.sender_id,
+    receiverId: item.receiver_id,
+    createdAt: item.created_at,
+    otherParty:
+      item.sender_id === senderId
+        ? userDetailsMap.get(item.receiver_id)
+        : userDetailsMap.get(item.sender_id),
+    senderName:
+      item.sender_id === senderId
+        ? senderDetails
+        : userDetailsMap.get(item.sender_id),
+  }));
+
   return res.status(200).json({
     status: true,
-    data: conversation,
+    authUserId: senderId,
+    data,
   });
 };
 export const fetchMessage = async (req: any, res: any) => {
@@ -163,3 +214,18 @@ export const fetchMessage = async (req: any, res: any) => {
     });
   }
 };
+
+async function fetchUserDetailfromBackend(data: string, res: any) {
+  try {
+    const res = await axios.get(`${process.env.API_URL}/user/info/${data}`, {
+      headers: {
+        // "SECRET-KEY": "mcIJfqCJuX7d8hPrb2yq3g1L3XH5ozxnH9LxVR7f0CMluP4Y7Y",
+      },
+    });
+    return res.data;
+  } catch (error: any) {
+    throw new Error(
+      error.response?.data?.message || "Failed to fetch user details"
+    );
+  }
+}
