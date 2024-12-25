@@ -4,7 +4,8 @@
   "description": "chat backend for snapaura a social media app made entirly using laravel as main backend",
   "main": "index.ts",
   "scripts": {
-    "dev": "nodemon index.ts"
+    "dev": "nodemon index.ts",
+    "postinstall": "prisma generate"
   },
   "repository": {
     "type": "git",
