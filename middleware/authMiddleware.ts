@@ -10,7 +10,6 @@ export const protect = async (req: any, res: any, next: () => void) => {
   ) {
     try {
       token = req.headers.authorization.split(" ")[1];
-      console.log(token + "secret" + process.env.JWT_SECRET);
       const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
 
       if (!decoded) {

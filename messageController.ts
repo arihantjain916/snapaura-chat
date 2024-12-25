@@ -219,7 +219,7 @@ async function fetchUserDetailfromBackend(data: string, res: any) {
   try {
     const res = await axios.get(`${process.env.API_URL}/user/info/${data}`, {
       headers: {
-        // "SECRET-KEY": "mcIJfqCJuX7d8hPrb2yq3g1L3XH5ozxnH9LxVR7f0CMluP4Y7Y",
+        "SECRET-KEY": process.env.SECRET_KEY as string,
       },
     });
     return res.data;
