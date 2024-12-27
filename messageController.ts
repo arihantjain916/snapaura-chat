@@ -13,7 +13,7 @@ export const fetchUserDetail = async (data: string) => {
 
     return response.data.user;
   } catch (err) {
-    console.log(err);
+    throw err;
   }
 };
 
@@ -63,7 +63,7 @@ export const saveMessage = async (
     });
 
     if (!sendMessage) {
-      console.log("error");
+      throw "Error occured in line:66";
     }
     const sendUserSocket = users.get(data.receiverId);
     if (sendUserSocket) {
@@ -123,8 +123,6 @@ export const fetchConversation = async (req: any, res: any) => {
       error: err.message,
     });
   }
-
-  console.log(userDetails);
 
   const userDetailsMap = new Map(
     userDetails.map((user) => [user.data.id, user.data])
