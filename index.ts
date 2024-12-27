@@ -16,7 +16,7 @@ app.get("/", function (req, res) {
   });
 });
 
-app.get("/messages/:receiverId", protect , fetchMessage);
+app.get("/messages/:convoId", fetchMessage);
 app.get("/conversation",protect, fetchConversation);
 
 const server = app.listen(3001, () => {

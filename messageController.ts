@@ -150,35 +150,11 @@ export const fetchConversation = async (req: any, res: any) => {
   });
 };
 export const fetchMessage = async (req: any, res: any) => {
-  const senderId = req.user.id;
-  const receiverId = req.params.receiverId;
+  const convoId = req.params.convoId;
 
   try {
-    const conversation = await prisma.conversation.findFirst({
-      where: {
-        OR: [
-          {
-            sender_id: senderId,
-            receiver_id: receiverId,
-          },
-          {
-            sender_id: receiverId,
-            receiver_id: senderId,
-          },
-        ],
-      },
-      select: { id: true },
-    });
-
-    if (!conversation) {
-      return res.status(404).json({
-        message: "Conversation not found",
-        data: [],
-      });
-    }
-
     const messages = await prisma.message.findMany({
-      where: { conversationId: conversation.id },
+      where: { conversationId: convoId },
     });
 
     if (!messages || messages.length === 0) {
@@ -204,11 +180,13 @@ export const fetchMessage = async (req: any, res: any) => {
     return res.status(200).json({
       message: "Messages found",
       data: messageFilter,
+      success: true,
     });
   } catch (error: any) {
     return res.status(500).json({
       message: "An error occurred while fetching messages",
       error: error.message,
+      success: false,
     });
   }
 };
