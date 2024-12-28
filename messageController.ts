@@ -67,7 +67,8 @@ export const saveMessage = async (
     }
     const sendUserSocket = users.get(data.receiverId);
     if (sendUserSocket) {
-      io.to(sendUserSocket).emit("msg-recieve", data.message);
+      console.log(sendMessage)
+      io.to(sendUserSocket).emit("msg-recieve", sendMessage);
     }
   });
 };
