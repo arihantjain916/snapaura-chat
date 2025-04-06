@@ -67,7 +67,7 @@ export const saveMessage = async (
     }
     const sendUserSocket = users.get(data.receiverId);
     if (sendUserSocket) {
-      console.log(sendMessage)
+      console.log(sendMessage);
       io.to(sendUserSocket).emit("msg-recieve", sendMessage);
     }
   });
@@ -206,3 +206,46 @@ async function fetchUserDetailfromBackend(data: string, res: any) {
     );
   }
 }
+
+export const startConversation = async (req: any, res: any) => {
+  try {
+    const { receiver_id } = req.params;
+    const { id } = req.user;
+
+    const isChatExist = await prisma.conversation.findFirst({
+      where: {
+        OR: [
+          {
+            sender_id: id,
+            receiver_id: receiver_id,
+          },
+          {
+            sender_id: receiver_id,
+            receiver_id: id,
+          },
+        ],
+      },
+    });
+
+    if (!isChatExist) {
+      await prisma.conversation.create({
+        data: {
+          sender_id: id,
+          receiver_id: receiver_id,
+        },
+      });
+    }
+
+    return res.status(200).json({
+      message: "Conversation started successfully",
+      success: true,
+     
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      message: "An error occurred while start conversation",
+      error: error.message,
+      success: false,
+    });
+  }
+};
