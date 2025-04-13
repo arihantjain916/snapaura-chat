@@ -1,4 +1,4 @@
-import express from "express";
+import express, { NextFunction, Request, Response } from "express";
 import { Server } from "socket.io";
 import {
   fetchUserDetail,
@@ -8,8 +8,15 @@ import {
   startConversation,
 } from "./messageController";
 import { protect } from "./middleware/authMiddleware";
+import { createClient } from "redis";
 
 const app = express();
+
+const client = createClient({
+  url: "redis://localhost:6379",
+});
+
+client.connect().catch(console.error);
 
 app.get("/", function (req, res) {
   res.status(200).json({
@@ -17,6 +24,34 @@ app.get("/", function (req, res) {
   });
 });
 
+app.get(
+  "/cached",
+  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const key = "cached-data";
+      const cached = await client.get(key);
+
+      if (cached) {
+        res.status(200).json({
+          source: "cache",
+          data: cached,
+        });
+
+        return;
+      }
+
+      const freshData = "Here is some fresh data!";
+      await client.set(key, freshData, { EX: 10 });
+
+      res.status(200).json({
+        source: "database",
+        data: freshData,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 app.get("/messages/:convoId", fetchMessage);
 app.get("/conversation", protect, fetchConversation);
 app.get("/start/conversation/:receiver_id", protect, startConversation);
