@@ -1,15 +1,30 @@
+import { NextFunction, Request, Response } from "express";
 import axios from "axios";
 import { PrismaClient } from "@prisma/client";
 import { Socket, DefaultEventsMap, Server } from "socket.io";
+
 const prisma = new PrismaClient();
 
-export const fetchUserDetail = async (data: string) => {
+interface AuthenticatedRequest extends Request {
+  user: { id: string; [key: string]: any };
+}
+
+export const fetchUserDetail = async (data: string, client: any) => {
   try {
+    const key = `user-${data}`;
+    const cached = await client.get(key);
+
+    if (cached) {
+      return JSON.parse(cached);
+    }
+
     const response = await axios.get(`${process.env.API_URL}/user/profile`, {
       headers: {
         Authorization: `Bearer ${data}`,
       },
     });
+
+    await client.set(key, JSON.stringify(response?.data?.user), { EX: 40 });
 
     return response.data.user;
   } catch (err) {
@@ -67,15 +82,17 @@ export const saveMessage = async (
     }
     const sendUserSocket = users.get(data.receiverId);
     if (sendUserSocket) {
-      console.log(sendMessage);
       io.to(sendUserSocket).emit("msg-recieve", sendMessage);
     }
   });
 };
 
-export const fetchConversation = async (req: any, res: any) => {
-  const senderId = req.user.id;
-  const senderDetails = req.user;
+export const fetchConversation = async (
+  req: Request | AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const senderId = (req as AuthenticatedRequest).user.id;
+  const senderDetails = (req as AuthenticatedRequest).user;
   const conversation = await prisma.conversation.findMany({
     where: {
       OR: [
@@ -90,10 +107,11 @@ export const fetchConversation = async (req: any, res: any) => {
   });
 
   if (conversation.length === 0) {
-    return res.status(500).json({
+    res.status(500).json({
       status: false,
       data: [],
     });
+    return;
   }
 
   const userIdsToFetch = Array.from(
@@ -119,14 +137,15 @@ export const fetchConversation = async (req: any, res: any) => {
       })
     );
   } catch (err: any) {
-    return res.status(500).json({
+    res.status(500).json({
       status: false,
       error: err.message,
     });
+    return;
   }
 
   const userDetailsMap = new Map(
-    userDetails.map((user) => [user.data.id, user.data])
+    userDetails!.map((user) => [user.data.id, user.data])
   );
 
   const data = conversation.map((item) => ({
@@ -144,13 +163,17 @@ export const fetchConversation = async (req: any, res: any) => {
         : userDetailsMap.get(item.sender_id),
   }));
 
-  return res.status(200).json({
+  res.status(200).json({
     status: true,
     authUserId: senderId,
     data,
   });
+  return;
 };
-export const fetchMessage = async (req: any, res: any) => {
+export const fetchMessage = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   const convoId = req.params.convoId;
 
   try {
@@ -159,10 +182,13 @@ export const fetchMessage = async (req: any, res: any) => {
     });
 
     if (!messages || messages.length === 0) {
-      return res.status(404).json({
+      res.status(200).json({
         message: "No messages found",
         data: [],
+        success: true,
       });
+
+      return;
     }
 
     const messageFilter = messages.map((message) => ({
@@ -178,17 +204,20 @@ export const fetchMessage = async (req: any, res: any) => {
       // })),
     }));
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Messages found",
       data: messageFilter,
       success: true,
     });
+
+    return;
   } catch (error: any) {
-    return res.status(500).json({
+    res.status(500).json({
       message: "An error occurred while fetching messages",
       error: error.message,
       success: false,
     });
+    return;
   }
 };
 
@@ -207,10 +236,13 @@ async function fetchUserDetailfromBackend(data: string, res: any) {
   }
 }
 
-export const startConversation = async (req: any, res: any) => {
+export const startConversation = async (
+  req: Request | AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
   try {
     const { receiver_id } = req.params;
-    const { id } = req.user;
+    const { id } = (req as AuthenticatedRequest).user;
 
     const isChatExist = await prisma.conversation.findFirst({
       where: {
@@ -236,16 +268,17 @@ export const startConversation = async (req: any, res: any) => {
       });
     }
 
-    return res.status(200).json({
+    res.status(200).json({
       message: "Conversation started successfully",
       success: true,
-     
     });
+    return;
   } catch (error: any) {
-    return res.status(500).json({
+    res.status(500).json({
       message: "An error occurred while start conversation",
       error: error.message,
       success: false,
     });
+    return;
   }
 };
