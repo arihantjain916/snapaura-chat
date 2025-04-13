@@ -159,9 +159,10 @@ export const fetchMessage = async (req: any, res: any) => {
     });
 
     if (!messages || messages.length === 0) {
-      return res.status(404).json({
+      return res.status(200).json({
         message: "No messages found",
         data: [],
+        success: true,
       });
     }
 
