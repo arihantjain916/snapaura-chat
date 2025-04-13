@@ -70,8 +70,8 @@ const onlineUser = new Map();
 io.on("connection", (socket) => {
   console.log("a user connected");
 
-  socket.on("add-user", async (data) => {
-    const user = await fetchUserDetail(data);
+  socket.on("add-user", async (data: string) => {
+    const user = await fetchUserDetail(data, client);
     onlineUser.set(user.id, socket.id);
 
     console.log(onlineUser);
