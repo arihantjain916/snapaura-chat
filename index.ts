@@ -9,11 +9,13 @@ import {
 } from "./messageController";
 import { protect } from "./middleware/authMiddleware";
 import { createClient } from "redis";
+import multer from "multer";
+import { FileUpload } from "./fileUplaod";
 
 const app = express();
 
 const client = createClient({
-  url: "redis://localhost:6379",
+  url: process.env.REDIS_URL,
 });
 
 client.connect().catch(console.error);
@@ -24,37 +26,43 @@ app.get("/", function (req, res) {
   });
 });
 
-app.get(
-  "/cached",
-  async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+const uploadFile = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 200000000 },
+});
+
+app.get("/messages/:convoId", protect, fetchMessage);
+app.get("/conversation", protect, fetchConversation);
+app.get("/start/conversation/:receiver_id", protect, startConversation);
+
+app.post(
+  "/upload",
+  uploadFile.single("file"),
+  async (req: Request, res: Response) => {
     try {
-      const key = "cached-data";
-      const cached = await client.get(key);
-
-      if (cached) {
-        res.status(200).json({
-          source: "cache",
-          data: cached,
+      if (!req.file) {
+        res.status(500).json({
+          status: false,
+          data: "Please uplaod file",
         });
-
         return;
       }
 
-      const freshData = "Here is some fresh data!";
-      await client.set(key, freshData, { EX: 10 });
-
+      const url = await FileUpload(req.file!);
+      console.log(url)
       res.status(200).json({
-        source: "database",
-        data: freshData,
+        status: true,
+        data: url?.secure_url,
       });
-    } catch (err) {
-      next(err);
+    } catch (e: any) {
+      res.status(500).json({
+        status: false,
+        data: e.message,
+      });
+      return;
     }
   }
 );
-app.get("/messages/:convoId", fetchMessage);
-app.get("/conversation", protect, fetchConversation);
-app.get("/start/conversation/:receiver_id", protect, startConversation);
 
 const server = app.listen(3001, () => {
   console.log("Listening on port 3001");
@@ -68,7 +76,6 @@ const io = new Server(server, {
 
 const onlineUser = new Map();
 io.on("connection", (socket) => {
-
   socket.on("add-user", async (data: string) => {
     const user = await fetchUserDetail(data, client);
     onlineUser.set(user.id, socket.id);
