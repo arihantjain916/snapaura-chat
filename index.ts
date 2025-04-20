@@ -49,7 +49,6 @@ app.post(
       }
 
       const url = await FileUpload(req.file!);
-      console.log(url)
       res.status(200).json({
         status: true,
         data: url?.secure_url,

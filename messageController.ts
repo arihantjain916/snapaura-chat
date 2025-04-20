@@ -87,7 +87,6 @@ export const saveMessage = async (
         return "Failed to send message";
       }
       const sendUserSocket = users.get(data.receiverId);
-      console.log(sendUserSocket);
       if (sendUserSocket) {
         io.to(sendUserSocket).emit("msg-recieve", sendMessage);
       }
