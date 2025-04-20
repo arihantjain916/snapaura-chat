@@ -13,7 +13,7 @@ import { createClient } from "redis";
 const app = express();
 
 const client = createClient({
-  url: "redis://localhost:6379",
+  url: process.env.REDIS_URL,
 });
 
 client.connect().catch(console.error);
@@ -52,7 +52,7 @@ app.get(
     }
   }
 );
-app.get("/messages/:convoId", fetchMessage);
+app.get("/messages/:convoId", protect, fetchMessage);
 app.get("/conversation", protect, fetchConversation);
 app.get("/start/conversation/:receiver_id", protect, startConversation);
 
@@ -68,7 +68,6 @@ const io = new Server(server, {
 
 const onlineUser = new Map();
 io.on("connection", (socket) => {
-
   socket.on("add-user", async (data: string) => {
     const user = await fetchUserDetail(data, client);
     onlineUser.set(user.id, socket.id);

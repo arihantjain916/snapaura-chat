@@ -28,9 +28,12 @@ model Message {
   created_at     DateTime @default(now())
   message        String
   sender_id      String
-  receiver_id String
+  receiver_id    String
   conversationId String?  @db.ObjectId
   groupId        String?  @db.ObjectId
+
+  isReply Boolean?
+  replyId String?  @db.ObjectId
 
   conversation Conversation? @relation(fields: [conversationId], references: [id])
   group        Group?        @relation(fields: [groupId], references: [id])
