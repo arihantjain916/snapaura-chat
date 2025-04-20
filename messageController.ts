@@ -28,7 +28,7 @@ export const fetchUserDetail = async (data: string, client: any) => {
 
     return response.data.user;
   } catch (err) {
-    throw err;
+    return err;
   }
 };
 
@@ -37,54 +37,67 @@ export const saveMessage = async (
   io: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, any>,
   users: Map<any, any>
 ) => {
-  socket.on("send-msg", async (data) => {
-    var isChatExist: {
-      id: string;
-      created_at: Date;
-      receiver_id: string;
-      sender_id: string;
-    } | null;
-    isChatExist = await prisma.conversation.findFirst({
-      where: {
-        OR: [
-          {
+  try {
+    socket.on("send-msg", async (data) => {
+      if (!data.message) return;
+      if (!data.senderId || !data.receiverId) return;
+
+      var isChatExist: {
+        id: string;
+        created_at: Date;
+        receiver_id: string;
+        sender_id: string;
+      } | null;
+      isChatExist = await prisma.conversation.findFirst({
+        where: {
+          OR: [
+            {
+              sender_id: data.senderId,
+              receiver_id: data.receiverId,
+            },
+            {
+              sender_id: data.receiverId,
+              receiver_id: data.senderId,
+            },
+          ],
+        },
+      });
+
+      if (!isChatExist) {
+        isChatExist = await prisma.conversation.create({
+          data: {
             sender_id: data.senderId,
             receiver_id: data.receiverId,
           },
-          {
-            sender_id: data.receiverId,
-            receiver_id: data.senderId,
-          },
-        ],
-      },
-    });
+        });
+      }
 
-    if (!isChatExist) {
-      isChatExist = await prisma.conversation.create({
+      const sendMessage = await prisma.message.create({
         data: {
+          message: data.message,
+          conversationId: isChatExist?.id,
           sender_id: data.senderId,
           receiver_id: data.receiverId,
+          isReply: data.isReply || false,
+          replyId: data.replyId || null,
         },
       });
-    }
 
-    const sendMessage = await prisma.message.create({
-      data: {
-        message: data.message,
-        conversationId: isChatExist?.id,
-        sender_id: data.senderId,
-        receiver_id: data.receiverId,
-      },
+      if (!sendMessage) {
+        return "Failed to send message";
+      }
+      const sendUserSocket = users.get(data.receiverId);
+      console.log(sendUserSocket);
+      if (sendUserSocket) {
+        io.to(sendUserSocket).emit("msg-recieve", sendMessage);
+      }
     });
-
-    if (!sendMessage) {
-      throw "Error occured in line:66";
-    }
-    const sendUserSocket = users.get(data.receiverId);
-    if (sendUserSocket) {
-      io.to(sendUserSocket).emit("msg-recieve", sendMessage);
-    }
-  });
+  } catch (e: any) {
+    return {
+      error: e.message,
+      status: false,
+    };
+  }
 };
 
 export const fetchConversation = async (
@@ -197,6 +210,8 @@ export const fetchMessage = async (
       createdAt: message?.created_at,
       receiverId: message.receiver_id,
       senderId: message.sender_id,
+      isReply: message.isReply,
+      replyId: message.replyId,
       // type: message.conversationId ? "conversation" : "group",
       // attachments: message.fileAttachment.map((attachment) => ({
       //   fileUrl: attachment.fileUrl,
