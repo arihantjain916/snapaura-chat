@@ -86,8 +86,8 @@ export const saveMessage = async (
       if (!sendMessage) {
         return "Failed to send message";
       }
-      console.log(sendMessage);
       const sendUserSocket = users.get(data.receiverId);
+      console.log(sendUserSocket);
       if (sendUserSocket) {
         io.to(sendUserSocket).emit("msg-recieve", sendMessage);
       }
@@ -221,7 +221,7 @@ export const fetchMessage = async (
 
     res.status(200).json({
       message: "Messages found",
-      data: messages,
+      data: messageFilter,
       success: true,
     });
 
