@@ -119,7 +119,7 @@ export const fetchConversation = async (
   });
 
   if (conversation.length === 0) {
-    res.status(500).json({
+    res.status(200).json({
       status: false,
       data: [],
     });
