@@ -39,7 +39,6 @@ export const saveMessage = async (
 ) => {
   try {
     socket.on("send-msg", async (data) => {
-      if (!data.message) return;
       if (!data.senderId || !data.receiverId) return;
 
       var isChatExist: {
@@ -83,15 +82,32 @@ export const saveMessage = async (
         },
       });
 
-      if (!sendMessage) {
-        return "Failed to send message";
+      if (data?.file && data?.file?.length > 0) {
+        await Promise.all(
+          data.file.map(async (file: string, index: number) => {
+            await prisma.message_attachment.create({
+              data: {
+                messageId: sendMessage.id,
+                fileUrl: file,
+                fileType: data.fileType[index],
+                fileName: data.fileName[index],
+              },
+            });
+          })
+        );
       }
+
       const sendUserSocket = users.get(data.receiverId);
+      const receiverUserSocket = users.get(data.senderId);
+      if (!sendMessage) {
+        io.to(receiverUserSocket).emit("error", "Failed to send message");
+      }
       if (sendUserSocket) {
         io.to(sendUserSocket).emit("msg-recieve", sendMessage);
       }
     });
   } catch (e: any) {
+    console.log(e);
     return {
       error: e.message,
       status: false,
@@ -191,6 +207,9 @@ export const fetchMessage = async (
   try {
     const messages = await prisma.message.findMany({
       where: { conversationId: convoId },
+      include: {
+        file_attachment: true,
+      },
     });
 
     if (!messages || messages.length === 0) {
@@ -212,10 +231,11 @@ export const fetchMessage = async (
       isReply: message.isReply,
       replyId: message.replyId,
       // type: message.conversationId ? "conversation" : "group",
-      // attachments: message.fileAttachment.map((attachment) => ({
-      //   fileUrl: attachment.fileUrl,
-      //   fileType: attachment.fileType,
-      // })),
+      attachments: message?.file_attachment?.map((attachment) => ({
+        fileUrl: attachment.fileUrl,
+        fileType: attachment.fileType,
+        fileName: attachment.fileName,
+      })),
     }));
 
     res.status(200).json({

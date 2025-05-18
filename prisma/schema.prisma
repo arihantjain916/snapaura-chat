@@ -49,5 +49,6 @@ model Message_attachment {
   messageId String  @db.ObjectId
   fileUrl   String
   fileType  String
+  fileName  String
   message   Message @relation(fields: [messageId], references: [id])
 }
