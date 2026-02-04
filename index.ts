@@ -11,11 +11,17 @@ import { protect } from "./middleware/authMiddleware";
 import { createClient } from "redis";
 import multer from "multer";
 import { FileUpload } from "./fileUplaod";
+import "dotenv/config";
 
 const app = express();
 
 const client = createClient({
-  url: process.env.REDIS_URL,
+  username: process.env.REDIS_USERNAME,
+  password: process.env.REDIS_PASSWORD,
+  socket: {
+    host: process.env.REDIS_HOST,
+    port: Number(process.env.REDIS_PORT),
+  },
 });
 
 client.connect().catch(console.error);
@@ -63,9 +69,11 @@ app.post(
   },
 );
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5900;
 
 const server = app.listen(PORT, () => {
+  console.log("process.env.REDIS_PORT", process.env.REDIS_PORT);
+
   console.log(`Listening on port ${PORT}`);
 });
 

@@ -26,6 +26,8 @@
     "@types/node": "^22.7.5",
     "axios": "^1.7.7",
     "cloudinary": "^2.6.0",
+    "dotconfig": "^0.0.1-security",
+    "dotenv": "^17.2.3",
     "express": "^4.21.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
