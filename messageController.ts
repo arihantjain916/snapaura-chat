@@ -206,7 +206,7 @@ export const fetchMessage = async (
 
   try {
     const messages = await prisma.message.findMany({
-      where: { conversationId: convoId },
+      where: { conversationId: convoId as string },
       include: {
         file_attachment: true,
       },
@@ -283,10 +283,10 @@ export const startConversation = async (
         OR: [
           {
             sender_id: id,
-            receiver_id: receiver_id,
+            receiver_id: receiver_id as string,
           },
           {
-            sender_id: receiver_id,
+            sender_id: receiver_id as string,
             receiver_id: id,
           },
         ],
@@ -297,7 +297,7 @@ export const startConversation = async (
       await prisma.conversation.create({
         data: {
           sender_id: id,
-          receiver_id: receiver_id,
+          receiver_id: receiver_id as string,
         },
       });
     }
