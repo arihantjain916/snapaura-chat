@@ -1,11 +1,31 @@
+# FROM node:20-alpine
+
+# WORKDIR /app
+# COPY package*.json ./
+# RUN npm install
+
+# COPY . .
+# RUN npm run build
+
+# CMD ["npm", "start"]
+ 
+
 FROM node:20-alpine
 
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
 
+# install pnpm
+RUN npm install -g pnpm
+
+# copy package files
+COPY package.json pnpm-lock.yaml* ./
+
+# install deps
+RUN pnpm install --prod
+
+# copy app
 COPY . .
-RUN npm run build
+
+EXPOSE 3001
 
 CMD ["npm", "start"]
- 
