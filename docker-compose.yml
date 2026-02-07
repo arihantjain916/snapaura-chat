@@ -1,7 +1,20 @@
+# version: "3.9"
+
+# services:
+#   websocket:
+#     image: arihantjain916/snapaura-chat
+#     container_name: websocket
+#     ports:
+#       - "3001:3001"
+#     restart: always
+#     env_file:
+#       - .env
+
 version: "3.9"
 
 services:
   websocket:
+    build: . # Add this if you want to build locally
     image: arihantjain916/snapaura-chat
     container_name: websocket
     ports:
@@ -9,3 +22,6 @@ services:
     restart: always
     env_file:
       - .env
+    # Optional: ensure the DB is ready before the socket starts
+    # depends_on:
+    #   - db

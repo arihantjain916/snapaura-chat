@@ -1,31 +1,179 @@
-# FROM node:20-alpine
+# # # # FROM node:20-alpine
 
-# WORKDIR /app
-# COPY package*.json ./
-# RUN npm install
+# # # # WORKDIR /app
+# # # # COPY package*.json ./
+# # # # RUN npm install
 
-# COPY . .
-# RUN npm run build
+# # # # COPY . .
+# # # # RUN npm run build
 
-# CMD ["npm", "start"]
+# # # # CMD ["npm", "start"]
  
 
-FROM node:20-alpine
+# # # FROM node:20-alpine
+
+# # # WORKDIR /app
+
+# # # # install pnpm
+# # # RUN npm install -g pnpm
+
+# # # # copy package files
+# # # COPY package.json pnpm-lock.yaml* prisma/* ./
+
+# # # # install deps
+# # # RUN pnpm install --frozen-lockfile --prod
+
+# # # # copy app
+# # # COPY . .
+
+# # # RUN pnpm build
+
+# # # EXPOSE 3001
+
+# # # CMD ["npm", "start"]
+
+# # # ---------- BUILD STAGE ----------
+# # FROM node:20-alpine AS builder
+
+# # WORKDIR /app
+
+# # RUN npm install -g pnpm
+
+# # COPY package.json pnpm-lock.yaml ./
+# # COPY prisma ./prisma
+
+# # # install ALL deps including dev
+# # RUN pnpm install
+
+# # # ensure prisma CLI exists
+# # RUN pnpm add prisma -D
+
+# # COPY . .
+
+# # RUN npx prisma generate
+# # RUN pnpm build
+
+
+# # # ---------- PRODUCTION STAGE ----------
+# # FROM node:20-alpine
+
+# # WORKDIR /app
+
+# # RUN npm install -g pnpm
+
+# # COPY package.json pnpm-lock.yaml ./
+# # COPY prisma ./prisma
+
+# # RUN pnpm install --prod
+
+# # COPY --from=builder /app/dist ./dist
+# # COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# # COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+# # EXPOSE 3001
+
+# # CMD ["node","dist/index.mjs"]
+
+# # # ---------- BUILD STAGE ----------
+# # FROM node:20-alpine AS builder
+
+# # WORKDIR /app
+
+# # # Install pnpm once
+# # RUN npm install -g pnpm
+
+# # COPY package.json pnpm-lock.yaml ./
+# # COPY prisma ./prisma
+
+# # # Install all dependencies
+# # RUN pnpm install --frozen-lockfile
+
+# # COPY . .
+
+# # # Generate Prisma Client and build the TS project
+# # RUN npx prisma generate
+# # RUN pnpm build
+
+# # # ---------- PRODUCTION STAGE ----------
+# # FROM node:20-alpine AS runner
+
+# # WORKDIR /app
+
+# # # We only need the production env
+# # ENV NODE_ENV=production
+
+# # # Copy built files and necessary prisma files from builder
+# # COPY --from=builder /app/dist ./dist
+# # COPY --from=builder /app/node_modules ./node_modules
+# # COPY --from=builder /app/package.json ./package.json
+# # COPY --from=builder /app/prisma ./prisma
+
+# # # Expose the port
+# # EXPOSE 3001
+
+# # # Use the generated JS to start the server
+# # CMD ["node", "dist/index.mjs"]
+
+# # ---------- BUILD STAGE ----------
+# FROM node:20-alpine AS builder
+
+# # Required for Prisma to run on Alpine
+# RUN apk add --no-cache libc6-compat
+
+# WORKDIR /app
+
+# RUN npm install -g pnpm
+
+# # Copy lockfile and schema first to leverage caching
+# COPY package.json pnpm-lock.yaml ./
+# COPY prisma ./prisma
+
+# # Use --frozen-lockfile for CI/Docker environments
+# RUN pnpm install --frozen-lockfile
+
+# COPY . .
+
+# # Force install prisma CLI to ensure the binary exists in /app/node_modules
+# RUN pnpm add -D prisma
+
+# # Now generate
+# RUN pnpm prisma generate
+# RUN pnpm build
+# ---------- BUILD STAGE ----------
+FROM node:20-alpine AS builder
+
+# Essential for Prisma/Alpine compatibility
+RUN apk add --no-cache libc6-compat
 
 WORKDIR /app
 
-# install pnpm
 RUN npm install -g pnpm
 
-# copy package files
-COPY package.json pnpm-lock.yaml* ./
+# 1. Copy ONLY the dependency files first
+COPY package.json pnpm-lock.yaml ./
+COPY prisma ./prisma/
 
-# install deps
-RUN pnpm install --frozen-lockfile --prod
+# 2. Install EVERYTHING (including Prisma CLI)
+RUN pnpm install --frozen-lockfile
 
-# copy app
+# 3. Copy the rest of the source code (Dockerignore prevents local node_modules from coming in)
 COPY . .
+
+# 4. Generate and Build
+RUN pnpm prisma generate
+RUN pnpm build
+
+# ---------- PRODUCTION STAGE ----------
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Copy built app and the modules that contain the generated client
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3001
 
-CMD ["npm", "start"]
+CMD ["node", "dist/index.mjs"]
