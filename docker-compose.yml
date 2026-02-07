@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   websocket:
-    build: .
+    image: arihantjain916/snapaura-chat
     container_name: websocket
     ports:
       - "3001:3001"
