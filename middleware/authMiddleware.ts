@@ -1,36 +1,30 @@
-import axios from "axios";
+import { NextFunction, Request, Response } from "express";
+import { AuthUser, resolveUserFromToken } from "../userService";
 
-import jwt from "jsonwebtoken";
+export interface AuthenticatedRequest extends Request {
+  user: AuthUser;
+}
 
-export const protect = async (req: any, res: any, next: () => void) => {
-  let token;
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith("Bearer")
-  ) {
-    try {
-      token = req.headers.authorization.split(" ")[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
+export const protect = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  const header = req.headers.authorization;
 
-      if (!decoded) {
-        return res
-          .status(401)
-          .json({ message: "Not authorized, token failed" });
-      }
-
-      const response = await axios.get(`${process.env.API_URL}/user/profile`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      req.user = response.data.user;
-
-      next();
-    } catch (error) {
-      res.status(401).json({ message: "Not authorized, token failed" });
-    }
-  } else {
+  if (!header?.startsWith("Bearer ")) {
     res.status(401).json({ message: "Not authorized, no token" });
+    return;
+  }
+
+  const token = header.slice("Bearer ".length).trim();
+
+  try {
+    (req as AuthenticatedRequest).user = await resolveUserFromToken(token);
+    next();
+  } catch (error: any) {
+    // Logged rather than returned: the message can name the upstream host.
+    console.error("[auth] rejected token:", error?.message ?? error);
+    res.status(401).json({ message: "Not authorized, token failed" });
   }
 };

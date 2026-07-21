@@ -1,237 +1,322 @@
-import { NextFunction, Request, Response } from "express";
-import axios from "axios";
-import { PrismaClient } from "@prisma/client";
-import { Socket, DefaultEventsMap, Server } from "socket.io";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { Request, Response } from "express";
+import { DefaultEventsMap, Server, Socket } from "socket.io";
+import { AuthenticatedRequest } from "./middleware/authMiddleware";
+import { consumeSocketQuota } from "./rateLimit";
+import { AuthUser, fetchUserById } from "./userService";
 
-const prisma = new PrismaClient();
+export const prisma = new PrismaClient();
 
-interface AuthenticatedRequest extends Request {
-  user: { id: string; [key: string]: any };
+const MAX_MESSAGE_LENGTH = 4000;
+const MAX_ATTACHMENTS = 10;
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 100;
+
+type ConversationRecord = Prisma.ConversationGetPayload<{}>;
+
+/**
+ * Order-independent identifier for a pair of users.
+ *
+ * Conversations were looked up with an OR over both orderings and created if
+ * absent, with nothing stopping two concurrent sends from creating two rows
+ * for the same pair and silently splitting the history.
+ */
+export function pairKeyFor(a: string, b: string): string {
+  return [a, b].sort().join(":");
 }
 
-export const fetchUserDetail = async (data: string, client: any) => {
-  try {
-    const key = `user-${data}`;
-    const cached = await client.get(key);
-
-    if (cached) {
-      return JSON.parse(cached);
-    }
-
-    const response = await axios.get(`${process.env.API_URL}/user/profile`, {
-      headers: {
-        Authorization: `Bearer ${data}`,
-      },
-    });
-
-    await client.set(key, JSON.stringify(response?.data?.user), { EX: 40 });
-
-    return response.data.user;
-  } catch (err) {
-    return err;
-  }
-};
-
-export const saveMessage = async (
-  socket: Socket<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, any>,
-  io: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, any>,
-  users: Map<any, any>
-) => {
-  try {
-    socket.on("send-msg", async (data) => {
-      if (!data.senderId || !data.receiverId) return;
-
-      var isChatExist: {
-        id: string;
-        created_at: Date;
-        receiver_id: string;
-        sender_id: string;
-      } | null;
-      isChatExist = await prisma.conversation.findFirst({
-        where: {
-          OR: [
-            {
-              sender_id: data.senderId,
-              receiver_id: data.receiverId,
-            },
-            {
-              sender_id: data.receiverId,
-              receiver_id: data.senderId,
-            },
-          ],
-        },
-      });
-
-      if (!isChatExist) {
-        isChatExist = await prisma.conversation.create({
-          data: {
-            sender_id: data.senderId,
-            receiver_id: data.receiverId,
-          },
-        });
-      }
-
-      const sendMessage = await prisma.message.create({
-        data: {
-          message: data.message,
-          conversationId: isChatExist?.id,
-          sender_id: data.senderId,
-          receiver_id: data.receiverId,
-          isReply: data.isReply || false,
-          replyId: data.replyId || null,
-        },
-      });
-
-      if (data?.file && data?.file?.length > 0) {
-        await Promise.all(
-          data.file.map(async (file: string, index: number) => {
-            await prisma.message_attachment.create({
-              data: {
-                messageId: sendMessage.id,
-                fileUrl: file,
-                fileType: data.fileType[index],
-                fileName: data.fileName[index],
-              },
-            });
-          })
-        );
-      }
-
-      const sendUserSocket = users.get(data.receiverId);
-      const receiverUserSocket = users.get(data.senderId);
-      if (!sendMessage) {
-        io.to(receiverUserSocket).emit("error", "Failed to send message");
-      }
-      if (sendUserSocket) {
-        io.to(sendUserSocket).emit("msg-recieve", sendMessage);
-      }
-    });
-  } catch (e: any) {
-    console.log(e);
-    return {
-      error: e.message,
-      status: false,
-    };
-  }
-};
-
-export const fetchConversation = async (
-  req: Request | AuthenticatedRequest,
-  res: Response
-): Promise<void> => {
-  const senderId = (req as AuthenticatedRequest).user.id;
-  const senderDetails = (req as AuthenticatedRequest).user;
-  const conversation = await prisma.conversation.findMany({
+async function findConversation(
+  a: string,
+  b: string,
+): Promise<ConversationRecord | null> {
+  return prisma.conversation.findFirst({
     where: {
       OR: [
-        {
-          sender_id: senderId,
-        },
-        {
-          receiver_id: senderId,
-        },
+        { pair_key: pairKeyFor(a, b) },
+        // Rows written before pair_key existed.
+        { sender_id: a, receiver_id: b },
+        { sender_id: b, receiver_id: a },
       ],
     },
   });
+}
 
-  if (conversation.length === 0) {
-    res.status(200).json({
-      status: false,
-      data: [],
-    });
-    return;
+async function findOrCreateConversation(
+  senderId: string,
+  receiverId: string,
+): Promise<ConversationRecord> {
+  const existing = await findConversation(senderId, receiverId);
+
+  if (existing) {
+    return existing;
   }
 
-  const userIdsToFetch = Array.from(
-    new Set(
-      conversation.map((item) =>
-        item.sender_id === senderId ? item.receiver_id : item.sender_id
-      )
-    )
-  );
-
-  let userDetails;
-
   try {
-    userDetails = await Promise.all(
-      userIdsToFetch.map(async (userId) => {
-        try {
-          return await fetchUserDetailfromBackend(userId, res);
-        } catch (err: any) {
-          throw new Error(
-            `Error fetching details for userId ${userId}: ${err.message}`
-          );
-        }
-      })
-    );
-  } catch (err: any) {
-    res.status(500).json({
-      status: false,
-      error: err.message,
-    });
-    return;
-  }
-
-  const userDetailsMap = new Map(
-    userDetails!.map((user) => [user.data.id, user.data])
-  );
-
-  const data = conversation.map((item) => ({
-    id: item.id,
-    senderId: item.sender_id,
-    receiverId: item.receiver_id,
-    createdAt: item.created_at,
-    otherParty:
-      item.sender_id === senderId
-        ? userDetailsMap.get(item.receiver_id)
-        : userDetailsMap.get(item.sender_id),
-    senderName:
-      item.sender_id === senderId
-        ? senderDetails
-        : userDetailsMap.get(item.sender_id),
-  }));
-
-  res.status(200).json({
-    status: true,
-    authUserId: senderId,
-    data,
-  });
-  return;
-};
-export const fetchMessage = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  const convoId = req.params.convoId;
-
-  try {
-    const messages = await prisma.message.findMany({
-      where: { conversationId: convoId as string },
-      include: {
-        file_attachment: true,
+    return await prisma.conversation.create({
+      data: {
+        sender_id: senderId,
+        receiver_id: receiverId,
+        pair_key: pairKeyFor(senderId, receiverId),
       },
     });
+  } catch (err) {
+    // Lost a race with a concurrent create.
+    const raced = await findConversation(senderId, receiverId);
+    if (raced) {
+      return raced;
+    }
+    throw err;
+  }
+}
 
-    if (!messages || messages.length === 0) {
-      res.status(200).json({
-        message: "No messages found",
-        data: [],
-        success: true,
+function isParticipant(
+  conversation: ConversationRecord,
+  userId: string,
+): boolean {
+  return (
+    conversation.sender_id === userId || conversation.receiver_id === userId
+  );
+}
+
+/**
+ * Express 5 types route params as `string | string[]`, since a repeated
+ * pattern can bind more than one value.
+ */
+function routeParam(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value) && typeof value[0] === "string") {
+    return value[0];
+  }
+  return "";
+}
+
+function pageSize(raw: unknown): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_PAGE_SIZE;
+  }
+  return Math.min(Math.trunc(parsed), MAX_PAGE_SIZE);
+}
+
+/**
+ * Register the send-msg handler for an already-authenticated socket.
+ *
+ * The sender is taken from the socket's verified identity. It used to be read
+ * straight out of the payload, so any anonymous client could emit a message
+ * as any user, to any user.
+ */
+export const saveMessage = (
+  socket: Socket<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, any>,
+  io: Server<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, any>,
+  users: Map<string, string>,
+): void => {
+  socket.on("send-msg", async (data: any) => {
+    // The old try/catch wrapped this registration rather than the handler, so
+    // every throw in here became an unhandled rejection.
+    try {
+      const sender = socket.data.user as AuthUser | undefined;
+
+      if (!sender?.id) {
+        socket.emit("error", "Not authenticated");
+        return;
+      }
+
+      const receiverId = typeof data?.receiverId === "string" ? data.receiverId : "";
+      const message = typeof data?.message === "string" ? data.message : "";
+
+      if (!receiverId || receiverId === sender.id) {
+        socket.emit("error", "Invalid recipient");
+        return;
+      }
+
+      if (!message.trim() && !Array.isArray(data?.file)) {
+        socket.emit("error", "Message is empty");
+        return;
+      }
+
+      if (message.length > MAX_MESSAGE_LENGTH) {
+        socket.emit("error", "Message is too long");
+        return;
+      }
+
+      if (!(await consumeSocketQuota(sender.id, 60, 60))) {
+        socket.emit("error", "You are sending messages too quickly");
+        return;
+      }
+
+      const conversation = await findOrCreateConversation(sender.id, receiverId);
+
+      const sendMessage = await prisma.message.create({
+        data: {
+          message,
+          conversationId: conversation.id,
+          sender_id: sender.id,
+          receiver_id: receiverId,
+          isReply: Boolean(data?.isReply),
+          replyId: typeof data?.replyId === "string" ? data.replyId : null,
+        },
       });
 
+      const attachments = Array.isArray(data?.file) ? data.file : [];
+
+      if (attachments.length > 0) {
+        const fileTypes = Array.isArray(data?.fileType) ? data.fileType : [];
+        const fileNames = Array.isArray(data?.fileName) ? data.fileName : [];
+
+        await prisma.message_attachment.createMany({
+          // Parallel arrays were indexed blindly; a short fileType or fileName
+          // array threw inside a Promise.all and took the process with it.
+          data: attachments.slice(0, MAX_ATTACHMENTS).map((fileUrl: string, index: number) => ({
+            messageId: sendMessage.id,
+            fileUrl: String(fileUrl),
+            fileType: String(fileTypes[index] ?? "raw"),
+            fileName: String(fileNames[index] ?? "attachment"),
+          })),
+        });
+      }
+
+      const recipientSocket = users.get(receiverId);
+
+      if (recipientSocket) {
+        io.to(recipientSocket).emit("msg-recieve", sendMessage);
+      }
+
+      // Acknowledge to the sender so the client can reconcile its optimistic
+      // copy; previously only failures were reported back, and to the wrong
+      // socket at that.
+      socket.emit("msg-sent", sendMessage);
+    } catch (err: any) {
+      console.error("[socket] send-msg failed:", err?.message ?? err);
+      socket.emit("error", "Failed to send message");
+    }
+  });
+};
+
+export const fetchConversation = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const sender = (req as AuthenticatedRequest).user;
+  const take = pageSize(req.query.limit);
+  const skip = Math.max(Number(req.query.skip) || 0, 0);
+
+  try {
+    const conversations = await prisma.conversation.findMany({
+      where: {
+        OR: [{ sender_id: sender.id }, { receiver_id: sender.id }],
+      },
+      orderBy: { created_at: "desc" },
+      take,
+      skip,
+    });
+
+    if (conversations.length === 0) {
+      res.status(200).json({ status: true, authUserId: sender.id, data: [] });
       return;
     }
 
-    const messageFilter = messages.map((message) => ({
+    const otherIds = Array.from(
+      new Set(
+        conversations.map((item) =>
+          item.sender_id === sender.id ? item.receiver_id : item.sender_id,
+        ),
+      ),
+    );
+
+    // allSettled, not all: one deleted or unreachable user used to fail the
+    // caller's entire conversation list with a 500.
+    const results = await Promise.allSettled(otherIds.map(fetchUserById));
+
+    const userDetailsMap = new Map<string, AuthUser>();
+
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled" && result.value?.id) {
+        userDetailsMap.set(otherIds[index]!, result.value);
+      }
+    });
+
+    const data = conversations.map((item) => {
+      const otherId =
+        item.sender_id === sender.id ? item.receiver_id : item.sender_id;
+
+      return {
+        id: item.id,
+        senderId: item.sender_id,
+        receiverId: item.receiver_id,
+        createdAt: item.created_at,
+        otherParty: userDetailsMap.get(otherId) ?? null,
+        senderName:
+          item.sender_id === sender.id
+            ? sender
+            : (userDetailsMap.get(item.sender_id) ?? null),
+      };
+    });
+
+    res.status(200).json({ status: true, authUserId: sender.id, data });
+  } catch (error: any) {
+    console.error("[conversations] fetch failed:", error?.message ?? error);
+    res.status(500).json({
+      status: false,
+      message: "An error occurred while fetching conversations",
+    });
+  }
+};
+
+export const fetchMessage = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const convoId = routeParam(req.params.convoId);
+  const viewer = (req as AuthenticatedRequest).user;
+  const take = pageSize(req.query.limit);
+  const skip = Math.max(Number(req.query.skip) || 0, 0);
+
+  if (!convoId) {
+    res.status(400).json({ success: false, message: "Conversation id is required" });
+    return;
+  }
+
+  try {
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: convoId },
+    });
+
+    if (!conversation) {
+      res.status(404).json({ success: false, message: "Conversation not found" });
+      return;
+    }
+
+    // Any authenticated user could previously read any conversation just by
+    // knowing (or guessing) its id.
+    if (!isParticipant(conversation, viewer.id)) {
+      res.status(403).json({
+        success: false,
+        message: "You are not part of this conversation",
+      });
+      return;
+    }
+
+    const messages = await prisma.message.findMany({
+      where: { conversationId: convoId },
+      include: { file_attachment: true },
+      // There was no ordering at all, so message order was whatever the
+      // database happened to return.
+      orderBy: { created_at: "asc" },
+      take,
+      skip,
+    });
+
+    const data = messages.map((message) => ({
       id: message.id,
       message: message.message,
-      createdAt: message?.created_at,
+      createdAt: message.created_at,
       receiverId: message.receiver_id,
       senderId: message.sender_id,
       isReply: message.isReply,
       replyId: message.replyId,
-      // type: message.conversationId ? "conversation" : "group",
-      attachments: message?.file_attachment?.map((attachment) => ({
+      attachments: message.file_attachment.map((attachment) => ({
         fileUrl: attachment.fileUrl,
         fileType: attachment.fileType,
         fileName: attachment.fileName,
@@ -239,80 +324,61 @@ export const fetchMessage = async (
     }));
 
     res.status(200).json({
-      message: "Messages found",
-      data: messageFilter,
+      message: data.length > 0 ? "Messages found" : "No messages found",
+      data,
       success: true,
     });
-
-    return;
   } catch (error: any) {
+    console.error("[messages] fetch failed:", error?.message ?? error);
     res.status(500).json({
-      message: "An error occurred while fetching messages",
-      error: error.message,
       success: false,
+      message: "An error occurred while fetching messages",
     });
-    return;
   }
 };
 
-async function fetchUserDetailfromBackend(data: string, res: any) {
-  try {
-    const res = await axios.get(`${process.env.API_URL}/user/info/${data}`, {
-      headers: {
-        "SECRET-KEY": process.env.SECRET_KEY as string,
-      },
-    });
-    return res.data;
-  } catch (error: any) {
-    throw new Error(
-      error.response?.data?.message || "Failed to fetch user details"
-    );
-  }
-}
-
 export const startConversation = async (
-  req: Request | AuthenticatedRequest,
-  res: Response
+  req: Request,
+  res: Response,
 ): Promise<void> => {
-  try {
-    const { receiver_id } = req.params;
-    const { id } = (req as AuthenticatedRequest).user;
+  const receiver_id = routeParam(req.params.receiver_id);
+  const sender = (req as AuthenticatedRequest).user;
 
-    const isChatExist = await prisma.conversation.findFirst({
-      where: {
-        OR: [
-          {
-            sender_id: id,
-            receiver_id: receiver_id as string,
-          },
-          {
-            sender_id: receiver_id as string,
-            receiver_id: id,
-          },
-        ],
-      },
+  if (!receiver_id) {
+    res.status(400).json({ success: false, message: "Receiver id is required" });
+    return;
+  }
+
+  if (receiver_id === sender.id) {
+    res.status(422).json({
+      success: false,
+      message: "You cannot start a conversation with yourself",
     });
+    return;
+  }
 
-    if (!isChatExist) {
-      await prisma.conversation.create({
-        data: {
-          sender_id: id,
-          receiver_id: receiver_id as string,
-        },
-      });
+  try {
+    // The receiver was never checked, so conversations could be opened against
+    // ids that do not belong to anybody.
+    const receiver = await fetchUserById(receiver_id);
+
+    if (!receiver?.id) {
+      res.status(404).json({ success: false, message: "User not found" });
+      return;
     }
+
+    const conversation = await findOrCreateConversation(sender.id, receiver_id);
 
     res.status(200).json({
       message: "Conversation started successfully",
+      data: { id: conversation.id },
       success: true,
     });
-    return;
   } catch (error: any) {
+    console.error("[conversations] start failed:", error?.message ?? error);
     res.status(500).json({
-      message: "An error occurred while start conversation",
-      error: error.message,
       success: false,
+      message: "An error occurred while starting the conversation",
     });
-    return;
   }
 };

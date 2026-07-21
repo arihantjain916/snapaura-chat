@@ -2,12 +2,17 @@
   "name": "snap-aura-chat-backend",
   "version": "1.0.0",
   "description": "chat backend for snapaura a social media app made entirly using laravel as main backend",
-  "main": "index.ts",
+  "main": "dist/index.mjs",
   "scripts": {
     "dev": "nodemon index.ts",
     "postinstall": "prisma generate",
     "build": "prisma generate && tsup index.ts --format esm --clean --minify",
-    "start": "node dist/index.js"
+    "start": "node dist/index.mjs",
+    "typecheck": "tsc --noEmit",
+    "backfill:pairkey": "ts-node scripts/backfillPairKey.ts"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "repository": {
     "type": "git",
@@ -21,26 +26,24 @@
   "homepage": "https://github.com/arihantjain916/snapaura-chat#readme",
   "dependencies": {
     "@prisma/client": "^6.6.0",
-    "@types/express": "^5.0.0",
-    "@types/jsonwebtoken": "^9.0.9",
-    "@types/multer": "^1.4.12",
-    "@types/node": "^22.7.5",
     "axios": "^1.7.7",
     "cloudinary": "^2.6.0",
-    "dotconfig": "^0.0.1-security",
     "dotenv": "^17.2.3",
     "express": "^4.21.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
+    "redis": "^4.7.0",
+    "socket.io": "^4.8.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^22.7.5",
     "nodemon": "^3.1.7",
     "prisma": "^6.6.0",
-    "redis": "^4.7.0",
-    "socket.io": "^4.8.0",
     "ts-node": "^10.9.2",
     "tsup": "^8.5.1",
     "typescript": "^5.6.3"
-  },
-  "devDependencies": {
-    "prisma": "^6.6.0"
   }
 }

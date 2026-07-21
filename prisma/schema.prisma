@@ -14,8 +14,15 @@ model Conversation {
   sender_id   String
   message     Message[]
 
+  /// Order-independent "<idA>:<idB>" key for the pair, so the same two people
+  /// cannot end up with two conversations. Optional because rows created
+  /// before this field existed do not have it; run scripts/backfillPairKey.ts
+  /// and then make this @unique.
+  pair_key String?
+
   @@index([sender_id])
   @@index([receiver_id])
+  @@index([pair_key])
 }
 
 model Group {
@@ -42,6 +49,9 @@ model Message {
 
   @@index([conversationId])
   @@index([groupId])
+  /// Messages are read newest-conversation-first and ordered by time; without
+  /// this the sort was a collection scan.
+  @@index([conversationId, created_at])
 }
 
 model Message_attachment {
@@ -51,4 +61,6 @@ model Message_attachment {
   fileType  String
   fileName  String
   message   Message @relation(fields: [messageId], references: [id])
+
+  @@index([messageId])
 }
