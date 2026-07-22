@@ -6,12 +6,22 @@ import { Server, Socket } from "socket.io";
 import { FileUpload } from "./fileUpload";
 import { protect } from "./middleware/authMiddleware";
 import {
+  broadcastPresence,
   fetchConversation,
   fetchMessage,
+  fetchPresence,
+  markMessagesRead,
   prisma,
-  saveMessage,
+  registerChatHandlers,
+  setSocketServer,
   startConversation,
 } from "./messageController";
+import {
+  addSocket,
+  recordLastSeen,
+  removeSocket,
+  roomFor,
+} from "./presence";
 import { rateLimit } from "./rateLimit";
 import { connectRedis, disconnectRedis } from "./redisClient";
 import { AuthUser, resolveUserFromToken } from "./userService";
@@ -76,6 +86,20 @@ app.get(
   protect,
   rateLimit({ name: "messages", limit: 120, windowSeconds: 60 }),
   fetchMessage,
+);
+
+app.post(
+  "/messages/:convoId/read",
+  protect,
+  rateLimit({ name: "mark-read", limit: 120, windowSeconds: 60 }),
+  markMessagesRead,
+);
+
+app.get(
+  "/presence",
+  protect,
+  rateLimit({ name: "presence", limit: 120, windowSeconds: 60 }),
+  fetchPresence,
 );
 
 app.get(
@@ -152,14 +176,17 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e6,
 });
 
-/** userId -> socket id */
-const onlineUser = new Map<string, string>();
+setSocketServer(io);
 
 /**
- * Attach a verified user to the socket.
+ * Attach a verified user to the socket and put them online.
  *
  * Sockets were never authenticated: the client announced who it was via
  * "add-user" and every later event trusted the ids in the payload.
+ *
+ * Presence lives in presence.ts now. The socket joins a room named after the
+ * user, so every device they have open receives their messages instead of only
+ * whichever one connected last.
  */
 async function authenticateSocket(
   socket: Socket,
@@ -168,7 +195,13 @@ async function authenticateSocket(
   const user = await resolveUserFromToken(token);
 
   socket.data.user = user;
-  onlineUser.set(user.id, socket.id);
+  socket.join(roomFor(user.id));
+
+  // Only the first live socket is a transition worth announcing; a second tab
+  // must not re-broadcast "online".
+  if (addSocket(user.id, socket.id)) {
+    void broadcastPresence(io, user.id, "online");
+  }
 
   return user;
 }
@@ -201,7 +234,7 @@ io.on("connection", (socket) => {
   socket.on("add-user", async (token: string) => {
     try {
       const user = await authenticateSocket(socket, token);
-      socket.emit("user-added", { id: user.id });
+      socket.emit("user-added", { id: user.id, isOnline: true });
     } catch (err: any) {
       console.error("[socket] add-user rejected:", err?.message ?? err);
       socket.emit("error", "Not authorized");
@@ -209,17 +242,26 @@ io.on("connection", (socket) => {
     }
   });
 
-  saveMessage(socket, io, onlineUser);
+  registerChatHandlers(socket, io);
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
     // Was onlineUser.delete(socket.id) against a map keyed by user id, so
     // entries were never removed: the map grew without bound and messages kept
     // being routed to dead sockets.
     const user = socket.data.user as AuthUser | undefined;
 
-    if (user?.id && onlineUser.get(user.id) === socket.id) {
-      onlineUser.delete(user.id);
+    if (!user?.id) {
+      return;
     }
+
+    // False while the user still has another tab or device connected, so they
+    // are not reported offline until the last one goes.
+    if (!removeSocket(user.id, socket.id)) {
+      return;
+    }
+
+    const lastSeen = await recordLastSeen(user.id);
+    await broadcastPresence(io, user.id, "offline", lastSeen);
   });
 });
 

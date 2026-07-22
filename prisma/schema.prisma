@@ -42,6 +42,12 @@ model Message {
   isReply Boolean?
   replyId String?  @db.ObjectId
 
+  /// Read receipt. Set when the *receiver* opens the conversation, never by the
+  /// sender. Defaults to false so rows written before this field existed read
+  /// back as unread rather than as null.
+  is_read Boolean   @default(false)
+  read_at DateTime?
+
   conversation Conversation? @relation(fields: [conversationId], references: [id])
   group        Group?        @relation(fields: [groupId], references: [id])
 
@@ -52,6 +58,9 @@ model Message {
   /// Messages are read newest-conversation-first and ordered by time; without
   /// this the sort was a collection scan.
   @@index([conversationId, created_at])
+  /// Unread counts are per (conversation, recipient) and the conversation list
+  /// asks for all of them at once.
+  @@index([conversationId, receiver_id, is_read])
 }
 
 model Message_attachment {

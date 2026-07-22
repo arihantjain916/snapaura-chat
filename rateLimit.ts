@@ -74,14 +74,21 @@ export function rateLimit(options: {
 
 /**
  * Counter for socket events, which do not pass through Express middleware.
+ *
+ * `name` buckets each event separately, so a client reading conversations
+ * cannot exhaust its own allowance for sending messages.
  */
 export async function consumeSocketQuota(
   userId: string,
   limit: number,
   windowSeconds: number,
+  name = "send-msg",
 ): Promise<boolean> {
   try {
-    const count = await hit(`ratelimit:socket:${userId}`, windowSeconds);
+    const count = await hit(
+      `ratelimit:socket:${name}:${userId}`,
+      windowSeconds,
+    );
     return count <= limit;
   } catch {
     return true;
