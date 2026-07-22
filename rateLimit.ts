@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { sendError } from "./apiResponse";
 import { redis, redisReady } from "./redisClient";
 
 /**
@@ -57,10 +58,9 @@ export function rateLimit(options: {
       const count = await hit(key, options.windowSeconds);
 
       if (count > options.limit) {
-        res.status(429).json({
-          success: false,
-          message: "Too many requests, please slow down",
-        });
+        // Same wording and status the Laravel API uses when its own throttle
+        // trips, so a client needs one handler for both services.
+        sendError(res, "Too many requests, please slow down", 429);
         return;
       }
     } catch (err: any) {

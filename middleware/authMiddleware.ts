@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { sendError } from "../apiResponse";
 import { AuthUser, resolveUserFromToken } from "../userService";
 
 export interface AuthenticatedRequest extends Request {
@@ -13,7 +14,7 @@ export const protect = async (
   const header = req.headers.authorization;
 
   if (!header?.startsWith("Bearer ")) {
-    res.status(401).json({ message: "Not authorized, no token" });
+    sendError(res, "Not authorized, no token", 401);
     return;
   }
 
@@ -25,6 +26,6 @@ export const protect = async (
   } catch (error: any) {
     // Logged rather than returned: the message can name the upstream host.
     console.error("[auth] rejected token:", error?.message ?? error);
-    res.status(401).json({ message: "Not authorized, token failed" });
+    sendError(res, "Not authorized, token failed", 401);
   }
 };

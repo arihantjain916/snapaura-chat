@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { Request, Response } from "express";
 import { DefaultEventsMap, Server, Socket } from "socket.io";
+import { sendError, sendSuccess } from "./apiResponse";
 import { AuthenticatedRequest } from "./middleware/authMiddleware";
 import { consumeSocketQuota } from "./rateLimit";
 import { AuthUser, fetchUserById } from "./userService";
@@ -213,7 +214,9 @@ export const fetchConversation = async (
     });
 
     if (conversations.length === 0) {
-      res.status(200).json({ status: true, authUserId: sender.id, data: [] });
+      // authUserId was a top-level sibling of the payload; it is context about
+      // the caller rather than the payload itself, so it lives in meta.
+      sendSuccess(res, [], null, { authUserId: sender.id });
       return;
     }
 
@@ -254,13 +257,10 @@ export const fetchConversation = async (
       };
     });
 
-    res.status(200).json({ status: true, authUserId: sender.id, data });
+    sendSuccess(res, data, null, { authUserId: sender.id });
   } catch (error: any) {
     console.error("[conversations] fetch failed:", error?.message ?? error);
-    res.status(500).json({
-      status: false,
-      message: "An error occurred while fetching conversations",
-    });
+    sendError(res, "An error occurred while fetching conversations", 500);
   }
 };
 
@@ -274,7 +274,7 @@ export const fetchMessage = async (
   const skip = Math.max(Number(req.query.skip) || 0, 0);
 
   if (!convoId) {
-    res.status(400).json({ success: false, message: "Conversation id is required" });
+    sendError(res, "Conversation id is required", 400);
     return;
   }
 
@@ -284,17 +284,14 @@ export const fetchMessage = async (
     });
 
     if (!conversation) {
-      res.status(404).json({ success: false, message: "Conversation not found" });
+      sendError(res, "Conversation not found", 404);
       return;
     }
 
     // Any authenticated user could previously read any conversation just by
     // knowing (or guessing) its id.
     if (!isParticipant(conversation, viewer.id)) {
-      res.status(403).json({
-        success: false,
-        message: "You are not part of this conversation",
-      });
+      sendError(res, "You are not part of this conversation", 403);
       return;
     }
 
@@ -323,17 +320,10 @@ export const fetchMessage = async (
       })),
     }));
 
-    res.status(200).json({
-      message: data.length > 0 ? "Messages found" : "No messages found",
-      data,
-      success: true,
-    });
+    sendSuccess(res, data, data.length > 0 ? "Messages found" : "No messages found");
   } catch (error: any) {
     console.error("[messages] fetch failed:", error?.message ?? error);
-    res.status(500).json({
-      success: false,
-      message: "An error occurred while fetching messages",
-    });
+    sendError(res, "An error occurred while fetching messages", 500);
   }
 };
 
@@ -345,15 +335,12 @@ export const startConversation = async (
   const sender = (req as AuthenticatedRequest).user;
 
   if (!receiver_id) {
-    res.status(400).json({ success: false, message: "Receiver id is required" });
+    sendError(res, "Receiver id is required", 400);
     return;
   }
 
   if (receiver_id === sender.id) {
-    res.status(422).json({
-      success: false,
-      message: "You cannot start a conversation with yourself",
-    });
+    sendError(res, "You cannot start a conversation with yourself", 422);
     return;
   }
 
@@ -363,22 +350,15 @@ export const startConversation = async (
     const receiver = await fetchUserById(receiver_id);
 
     if (!receiver?.id) {
-      res.status(404).json({ success: false, message: "User not found" });
+      sendError(res, "User not found", 404);
       return;
     }
 
     const conversation = await findOrCreateConversation(sender.id, receiver_id);
 
-    res.status(200).json({
-      message: "Conversation started successfully",
-      data: { id: conversation.id },
-      success: true,
-    });
+    sendSuccess(res, { id: conversation.id }, "Conversation started successfully");
   } catch (error: any) {
     console.error("[conversations] start failed:", error?.message ?? error);
-    res.status(500).json({
-      success: false,
-      message: "An error occurred while starting the conversation",
-    });
+    sendError(res, "An error occurred while starting the conversation", 500);
   }
 };

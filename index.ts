@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express, { NextFunction, Request, Response } from "express";
 import multer from "multer";
+import { sendError, sendSuccess } from "./apiResponse";
 import { Server, Socket } from "socket.io";
 import { FileUpload } from "./fileUpload";
 import { protect } from "./middleware/authMiddleware";
@@ -67,9 +68,7 @@ const uploadFile = multer({
 });
 
 app.get("/", function (_req: Request, res: Response) {
-  res.status(200).json({
-    message: "Welcome to SnapAura Chat Backend!",
-  });
+  sendSuccess(res, undefined, "Welcome to SnapAura Chat Backend!");
 });
 
 app.get(
@@ -103,16 +102,16 @@ app.post(
   async (req: Request, res: Response) => {
     try {
       if (!req.file) {
-        res.status(400).json({ status: false, message: "Please upload a file" });
+        sendError(res, "Please upload a file", 400);
         return;
       }
 
       const url = await FileUpload(req.file);
 
-      res.status(200).json({ status: true, data: url?.secure_url });
+      sendSuccess(res, url?.secure_url, "File uploaded successfully");
     } catch (e: any) {
       console.error("[upload] failed:", e?.message ?? e);
-      res.status(500).json({ status: false, message: "Upload failed" });
+      sendError(res, "Upload failed", 500);
     }
   },
 );
@@ -125,17 +124,17 @@ app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
   }
 
   if (err?.code === "LIMIT_FILE_SIZE") {
-    res.status(413).json({ status: false, message: "File is too large" });
+    sendError(res, "File is too large", 413);
     return;
   }
 
   if (err?.message === "Unsupported file type") {
-    res.status(415).json({ status: false, message: err.message });
+    sendError(res, err.message, 415);
     return;
   }
 
   console.error("[http] unhandled error:", err?.message ?? err);
-  res.status(500).json({ status: false, message: "Something went wrong" });
+  sendError(res, "Something went wrong", 500);
 });
 
 // Was 5900, while the Dockerfile exposed 3001 and compose published 3001:3001
