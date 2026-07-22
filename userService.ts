@@ -54,7 +54,9 @@ export async function resolveUserFromToken(token: string): Promise<AuthUser> {
     timeout: 5000,
   });
 
-  const user = response?.data?.user as AuthUser | undefined;
+  // The Laravel API answers in one envelope now — { isSuccess, message, data }
+  // — so the profile arrives under `data`. It used to be a top-level `user`.
+  const user = response?.data?.data as AuthUser | undefined;
 
   if (!user?.id) {
     throw new Error("Backend did not return a user");
