@@ -3,15 +3,39 @@ import { createHash } from "crypto";
 import jwt from "jsonwebtoken";
 import { redis, redisReady } from "./redisClient";
 
+/**
+ * No index signature: the shape is now exactly what toPublicUser() emits, so
+ * a field added upstream cannot quietly ride along into chat payloads.
+ */
 export interface AuthUser {
   id: string;
   username?: string;
   name?: string;
   profile?: string;
-  [key: string]: any;
 }
 
 const PROFILE_CACHE_SECONDS = 40;
+
+/**
+ * Reduce a user to the fields this service actually uses.
+ *
+ * The whole object used to be cached in Redis and forwarded into the
+ * conversation list. Whatever the Laravel API happened to serialise came along
+ * for the ride — the caller's own email address among it — so a field added
+ * upstream would silently start appearing in chat payloads and in the cache.
+ */
+function toPublicUser(raw: any): AuthUser | undefined {
+  if (!raw?.id) {
+    return undefined;
+  }
+
+  return {
+    id: String(raw.id),
+    username: raw.username ?? undefined,
+    name: raw.name ?? undefined,
+    profile: raw.profile ?? undefined,
+  };
+}
 
 /**
  * Redis keys used to be the raw bearer token (`user-${token}`), so anyone who
@@ -56,7 +80,7 @@ export async function resolveUserFromToken(token: string): Promise<AuthUser> {
 
   // The Laravel API answers in one envelope now — { isSuccess, message, data }
   // — so the profile arrives under `data`. It used to be a top-level `user`.
-  const user = response?.data?.data as AuthUser | undefined;
+  const user = toPublicUser(response?.data?.data);
 
   if (!user?.id) {
     throw new Error("Backend did not return a user");
@@ -105,7 +129,7 @@ export async function fetchUserById(userId: string): Promise<AuthUser | null> {
       },
     );
 
-    const user = (response?.data?.data as AuthUser) ?? null;
+    const user = toPublicUser(response?.data?.data) ?? null;
 
     if (user?.id && redisReady()) {
       try {
